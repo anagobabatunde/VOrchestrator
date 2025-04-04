@@ -26,6 +26,3 @@ jobs:
     
     - name: Run tests
       run: cd tests && v run run_tests.v
-      
-    - name: Run benchmarks
-      run: cd tests/benchmarks && v run benchmark.v

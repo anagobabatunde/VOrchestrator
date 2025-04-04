@@ -1,0 +1,157 @@
+name: VOrchestrator Benchmarks
+
+on:
+  # Run benchmarks manually from the Actions tab
+  workflow_dispatch:
+  
+  # Run benchmarks on new releases
+  release:
+    types: [published]
+  
+  # Optionally run on a schedule (weekly)
+  schedule:
+    - cron: '0 0 * * 0' # Once a week on Sunday
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup V
+      uses: vlang/setup-v@v1
+      with:
+        check-latest: true
+    
+    - name: Install dependencies
+      run: v install
+      
+    - name: Setup Docker
+      uses: docker/setup-buildx-action@v2
+    
+    - name: Build VOrchestrator with optimizations
+      run: v -prod .
+    
+    - name: Create CI-compatible benchmark script
+      run: |
+        cat > tests/benchmarks/ci_benchmark.v << 'EOL'
+        module main
+
+        import os
+        import time
+        import math
+
+        struct BenchmarkResult {
+          name            string
+          duration_ms     int
+          binary_size_kb  int
+        }
+
+        fn main() {
+          println('VOrchestrator Performance Benchmark (CI)')
+          println('=====================================')
+          
+          // Ensure VOrchestrator is built with optimizations
+          println('\nUsing pre-built VOrchestrator binary')
+          
+          // Measure binary size
+          binary_size := measure_binary_size('./VOrchestrator')
+          println('Binary size: ${binary_size / 1024} KB (${binary_size / (1024 * 1024)} MB)')
+          
+          // Kill any existing VOrchestrator processes
+          os.system('pkill -f VOrchestrator || true')
+          
+          // Run the benchmarks
+          benchmarks := [
+            benchmark_startup(),
+            benchmark_help_command()
+          ]
+          
+          // Print benchmark results table
+          println('\nBenchmark Results')
+          println('================')
+          println('Operation                  | Duration (ms) | Binary Size (KB)')
+          println('---------------------------|---------------|----------------')
+          
+          for b in benchmarks {
+            name_padded := b.name + '                         '
+            println('${name_padded[..25]} | ${b.duration_ms:13} | ${b.binary_size_kb:14}')
+          }
+          
+          // Check against requirements
+          println('\nRequirements Check')
+          println('=================')
+          println('Binary size: ${binary_size / 1024} KB - Target: <10,240 KB (10 MB) - ${if binary_size < 10240 * 1024 { 'PASSED' } else { 'FAILED' }}')
+        }
+
+        // Measure base application startup time
+        fn benchmark_startup() BenchmarkResult {
+          println('\nBenchmarking application startup...')
+          
+          // Run VOrchestrator help and measure time
+          start := time.now()
+          os.execute('./VOrchestrator')
+          duration := time.now() - start
+          
+          duration_ms := int(math.ceil(duration / time.millisecond))
+          println('  Startup time: ${duration_ms}ms')
+          
+          binary_size := measure_binary_size('./VOrchestrator')
+          println('  Binary size: ${binary_size / 1024} KB')
+          
+          return BenchmarkResult{
+            name: 'Application Startup',
+            duration_ms: duration_ms,
+            binary_size_kb: int(binary_size / 1024)
+          }
+        }
+
+        // Benchmark help command performance
+        fn benchmark_help_command() BenchmarkResult {
+          println('\nBenchmarking help command...')
+          
+          // Run help command and measure time
+          start := time.now()
+          os.execute('./VOrchestrator help')
+          duration := time.now() - start
+          
+          duration_ms := int(math.ceil(duration / time.millisecond))
+          println('  Help command time: ${duration_ms}ms')
+          
+          binary_size := measure_binary_size('./VOrchestrator')
+          println('  Binary size: ${binary_size / 1024} KB')
+          
+          return BenchmarkResult{
+            name: 'Help Command',
+            duration_ms: duration_ms,
+            binary_size_kb: int(binary_size / 1024)
+          }
+        }
+
+        // Helper function to measure binary size
+        fn measure_binary_size(binary_path string) i64 {
+          if os.exists(binary_path) {
+            file_info := os.stat(binary_path) or {
+              println('Error getting file info: ${err}')
+              return 0
+            }
+            
+            return file_info.size
+          }
+          
+          return 0
+        }
+        EOL
+    
+    - name: Run CI-friendly benchmarks
+      run: cd tests/benchmarks && v run ci_benchmark.v
+      
+    - name: Store benchmark results
+      uses: actions/upload-artifact@v3
+      with:
+        name: benchmark-results
+        path: |
+          tests/benchmarks/*.txt
+          tests/benchmarks/*.log
+        retention-days: 90
