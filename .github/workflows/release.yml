@@ -5,33 +5,18 @@ on:
     tags:
       - 'v*' # Run when tag is pushed matching pattern v*, like v0.1.0
 
+permissions:
+  contents: write
+  packages: write
+
 jobs:
-  create-release:
+  build-and-release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      
-      - name: Extract version from tag
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-      
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout repository
+        uses: actions/checkout@v3
         with:
-          tag_name: ${{ github.ref }}
-          release_name: VOrchestrator ${{ github.ref_name }}
-          body_path: RELEASE_NOTES.md
-          draft: false
-          prerelease: false
-  
-  build-linux:
-    needs: create-release
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
+          fetch-depth: 0
       
       - name: Setup V
         uses: vlang/setup-v@v1
@@ -39,23 +24,34 @@ jobs:
           check-latest: true
       
       - name: Build for Linux
-        run: v -prod .
+        run: v -prod -o VOrchestrator-linux .
       
-      - name: Upload Linux Binary
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate release notes
+        run: |
+          echo "VOrchestrator Release" > RELEASE_INFO.md
+          echo "=====================" >> RELEASE_INFO.md
+          echo "" >> RELEASE_INFO.md
+          cat RELEASE_NOTES.md >> RELEASE_INFO.md
+          echo "" >> RELEASE_INFO.md
+          echo "## Changelog" >> RELEASE_INFO.md
+          echo "" >> RELEASE_INFO.md
+          cat CHANGELOG.md >> RELEASE_INFO.md
+      
+      - name: Release
+        uses: softprops/action-gh-release@v1
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./VOrchestrator
-          asset_name: VOrchestrator-linux
-          asset_content_type: application/octet-stream
+          body_path: RELEASE_INFO.md
+          files: |
+            VOrchestrator-linux
+          draft: false
+          prerelease: false
   
   build-macos:
-    needs: create-release
+    needs: build-and-release
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
       
       - name: Setup V
         uses: vlang/setup-v@v1
@@ -63,14 +59,11 @@ jobs:
           check-latest: true
       
       - name: Build for macOS
-        run: v -prod .
+        run: v -prod -o VOrchestrator-macos .
       
       - name: Upload macOS Binary
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./VOrchestrator
-          asset_name: VOrchestrator-macos
-          asset_content_type: application/octet-stream
+          files: VOrchestrator-macos
+          draft: false
+          prerelease: false
