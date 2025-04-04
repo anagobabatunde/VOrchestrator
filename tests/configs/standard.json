@@ -1,0 +1,28 @@
+{
+  "services": {
+    "web": {
+      "image": "nginx:latest",
+      "ports": ["8080:80"],
+      "env": {
+        "DEBUG": "true"
+      }
+    },
+    "api": {
+      "image": "httpd:latest",
+      "ports": ["8081:80"],
+      "env": {
+        "API_KEY": "test-key",
+        "DB_HOST": "db"
+      }
+    },
+    "db": {
+      "image": "postgres:14",
+      "ports": ["5432:5432"],
+      "env": {
+        "POSTGRES_PASSWORD": "testpassword",
+        "POSTGRES_USER": "testuser",
+        "POSTGRES_DB": "testdb"
+      }
+    }
+  }
+}

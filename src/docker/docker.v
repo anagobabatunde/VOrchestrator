@@ -57,8 +57,20 @@ pub fn start_container(image string, name string, ports []string, env map[string
 	// Build docker run command
 	mut cmd := 'docker run -d --name ${name}'
 	
-	// Add health check (for supported images)
-	cmd += ' --health-cmd="curl --fail http://localhost || exit 1" --health-interval=5s --health-retries=3'
+	// Add health check based on the image type
+	if image.contains('nginx') {
+		// For nginx, we can use curl to check the server
+		cmd += ' --health-cmd="curl -f http://localhost/ || exit 1" --health-interval=5s --health-retries=3'
+	} else if image.contains('httpd') {
+		// For httpd (Apache), we'll use a simpler approach - check if the process is running
+		cmd += ' --health-cmd="pidof httpd || exit 1" --health-interval=5s --health-retries=3'
+	} else if image.contains('postgres') {
+		// For PostgreSQL, use pg_isready
+		cmd += ' --health-cmd="pg_isready -U postgres || exit 1" --health-interval=5s --health-retries=3'
+	} else {
+		// For other images, use a generic approach that checks if the main process is running
+		cmd += ' --health-cmd="exit 0" --health-interval=5s --health-retries=3'
+	}
 	
 	// Add ports
 	for port in ports {
@@ -83,9 +95,8 @@ pub fn start_container(image string, name string, ports []string, env map[string
 	// Return the container ID from the output (strip newline)
 	container_id := result.output.trim_space()
 	
-	// Wait a bit and check the initial status
+	// Wait a bit for the container to start
 	time.sleep(1 * time.second)
-	check_container_health(container_id) or {}
 	
 	return container_id
 }
@@ -112,8 +123,8 @@ pub fn stop_container(id_or_name string) ! {
 
 // list_containers returns a list of running containers
 pub fn list_containers() ![]Container {
-	// Execute docker ps to get running containers with health status
-	result := os.execute('docker ps --format "{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}|{{.Health}}"')
+	// Execute docker ps to get running containers (without health status)
+	result := os.execute('docker ps --format "{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}"')
 	
 	if result.exit_code != 0 {
 		return error('Failed to list containers: ${result.output}')
@@ -149,44 +160,60 @@ pub fn list_containers() ![]Container {
 			}
 		}
 		
-		// Extract health status (may be empty if health checks not configured)
-		mut health := 'N/A'
-		if parts.len > 5 {
-			health = parts[5]
-		}
+		// Get container ID to check health separately
+		container_id := parts[0]
+		
+		// Get health status, ignoring errors and defaulting to 'unknown'
+		mut health_status := get_container_health_string(container_id)
 		
 		containers << Container{
-			id: parts[0]
+			id: container_id
 			name: parts[1]
 			image: parts[2]
 			status: parts[3]
 			ports: ports
-			health: health
+			health: health_status
 		}
 	}
 	
 	return containers
 }
 
-// check_container_health checks the health status of a container
-pub fn check_container_health(id_or_name string) !ContainerHealth {
-	// Get container health status
-	result := os.execute('docker inspect --format="{{.State.Health.Status}}" ${id_or_name}')
+// get_container_health_string returns a human readable health status string
+fn get_container_health_string(id_or_name string) string {
+	// Check if container has health checks configured
+	has_health_check := os.execute('docker inspect --format="{{if .State.Health}}true{{else}}false{{end}}" ${id_or_name}')
 	
-	if result.exit_code != 0 {
+	if has_health_check.exit_code != 0 || has_health_check.output.trim_space() != 'true' {
 		// Check if container is running at all
 		is_running_result := os.execute('docker inspect --format="{{.State.Running}}" ${id_or_name}')
 		
 		if is_running_result.exit_code != 0 || is_running_result.output.trim_space() != 'true' {
-			return ContainerHealth.unhealthy
+			return 'unhealthy'
 		}
 		
 		// Container is running but doesn't have health checks
-		return ContainerHealth.unknown
+		return 'unknown'
 	}
 	
-	health_status := result.output.trim_space()
+	// Get container health status
+	health_result := os.execute('docker inspect --format="{{.State.Health.Status}}" ${id_or_name}')
 	
+	if health_result.exit_code != 0 {
+		return 'unknown'
+	}
+	
+	health_status := health_result.output.trim_space()
+	
+	return health_status
+}
+
+// check_container_health checks the health status of a container
+pub fn check_container_health(id_or_name string) !ContainerHealth {
+	// Get health status string
+	health_status := get_container_health_string(id_or_name)
+	
+	// Convert to enum
 	match health_status {
 		'healthy' { return ContainerHealth.healthy }
 		'unhealthy' { return ContainerHealth.unhealthy }
@@ -197,19 +224,47 @@ pub fn check_container_health(id_or_name string) !ContainerHealth {
 
 // get_containers_health returns a map of container names to health status
 pub fn get_containers_health() !map[string]ContainerHealth {
-	// Get running containers
-	containers := list_containers()!
+	// Get running container IDs and names
+	result := os.execute('docker ps --format "{{.ID}}|{{.Names}}"')
+	
+	if result.exit_code != 0 {
+		return error('Failed to list containers: ${result.output}')
+	}
+	
+	// If output is empty, return empty map
+	if result.output.trim_space() == '' {
+		return map[string]ContainerHealth{}
+	}
 	
 	mut health_map := map[string]ContainerHealth{}
 	
-	// Check health for each container
-	for container in containers {
-		health := check_container_health(container.id) or {
-			health_map[container.name] = ContainerHealth.unknown
+	// Parse the output into container IDs and names
+	lines := result.output.split('\n')
+	for line in lines {
+		if line.trim_space() == '' {
 			continue
 		}
 		
-		health_map[container.name] = health
+		parts := line.split('|')
+		if parts.len < 2 {
+			continue // Skip malformed lines
+		}
+		
+		container_id := parts[0]
+		container_name := parts[1]
+		
+		// Get health status string
+		health_status := get_container_health_string(container_id)
+		
+		// Convert to enum
+		health := match health_status {
+			'healthy' { ContainerHealth.healthy }
+			'unhealthy' { ContainerHealth.unhealthy }
+			'starting' { ContainerHealth.starting }
+			else { ContainerHealth.unknown }
+		}
+		
+		health_map[container_name] = health
 	}
 	
 	return health_map

@@ -88,18 +88,39 @@ pub fn print_usage() {
 	}
 }
 
+// parse_config_path parses the args to find a config file path
+fn parse_config_path(args []string) string {
+	mut config_path := cli.default_config_path
+	
+	for i := 0; i < args.len; i++ {
+		if args[i] == '--config' && i + 1 < args.len {
+			// --config followed by a path
+			config_path = args[i + 1]
+			break
+		} else if args[i].starts_with('--config=') {
+			// --config=path format
+			parts := args[i].split('=')
+			if parts.len > 1 {
+				config_path = parts[1]
+			}
+			break
+		} else if !args[i].starts_with('-') && os.exists(args[i]) {
+			// Positional argument that is a file
+			config_path = args[i]
+			break
+		}
+	}
+	
+	return config_path
+}
+
 // Command handlers
 fn up_command(args []string) ! {
 	// First, make sure we clean up any conflicting containers
 	println('Checking for existing containers...')
 	
 	// Determine config file path
-	mut config_path := cli.default_config_path
-	
-	// If user specified a config path, use it
-	if args.len > 0 {
-		config_path = args[0]
-	}
+	config_path := parse_config_path(args)
 	
 	println('Loading configuration from ${config_path}...')
 	
@@ -144,12 +165,11 @@ fn down_command(args []string) ! {
 		return stop_all_command(args)
 	}
 	
-	// Determine config file path
-	mut config_path := cli.default_config_path
+	// Check if a config file was specified
+	config_path := parse_config_path(args)
 	
-	// If user specified a config path, use it
-	if args.len > 0 && os.exists(args[0]) {
-		config_path = args[0]
+	// If we have a config path, use it to stop services
+	if config_path != cli.default_config_path || os.exists(config_path) {
 		println('Loading configuration from ${config_path}...')
 		
 		// Load config file
@@ -179,21 +199,25 @@ fn down_command(args []string) ! {
 		return
 	}
 	
-	// Otherwise, treat arguments as container names to stop
+	// Otherwise, treat arguments as container names to stop (excluding any --config arg)
 	mut success_count := 0
 	mut failure_count := 0
 	
-	for name in args {
-		println('Stopping container: ${name}')
+	for arg in args {
+		if arg.starts_with('--') {
+			continue  // Skip flags
+		}
+		
+		println('Stopping container: ${arg}')
 		
 		// Stop container using docker module
-		docker.stop_container(name) or {
+		docker.stop_container(arg) or {
 			println('Error stopping container: ${err}')
 			failure_count++
 			continue
 		}
 		
-		println('Stopped container: ${name}')
+		println('Stopped container: ${arg}')
 		success_count++
 	}
 	
