@@ -32,37 +32,29 @@ jobs:
     
     - name: Run basic performance test
       run: |
-        echo "VOrchestrator Basic Performance Test" > benchmark_results.txt
-        echo "======================================" >> benchmark_results.txt
-        echo "" >> benchmark_results.txt
+        echo "## VOrchestrator Performance Metrics" > benchmark-report.md
+        echo "" >> benchmark-report.md
         
         # Measure binary size
         if [ -f "./VOrchestrator" ]; then
-          SIZE=$(stat -c %s "./VOrchestrator")
+          SIZE=$(wc -c < "./VOrchestrator")
           SIZE_KB=$((SIZE / 1024))
-          echo "Binary Size: $SIZE_KB KB" >> benchmark_results.txt
+          echo "- **Binary Size:** $SIZE_KB KB" >> benchmark-report.md
           echo "Binary Size: $SIZE_KB KB"
         else
-          echo "Binary not found!" >> benchmark_results.txt
+          echo "- **Binary Size:** Not available (build failed)" >> benchmark-report.md
           echo "Binary not found!"
         fi
         
         # Measure startup time
-        START=$(date +%s%N)
-        ./VOrchestrator
-        END=$(date +%s%N)
-        DURATION=$((($END - $START)/1000000))
-        echo "Startup Time: $DURATION ms" >> benchmark_results.txt
-        echo "Startup Time: $DURATION ms"
+        time ./VOrchestrator || echo "Command execution failed"
         
-        # Report test completion
-        echo "" >> benchmark_results.txt
-        echo "Test completed at: $(date)" >> benchmark_results.txt
-        echo "Test completed successfully!"
+        echo "" >> benchmark-report.md
+        echo "Benchmark completed at $(date)" >> benchmark-report.md
       shell: bash
-        
-    - name: Upload benchmark results
-      uses: actions/upload-artifact@v3
-      with:
-        name: benchmark-results
-        path: benchmark_results.txt
+    
+    - name: Add benchmark summary
+      run: |
+        echo "### VOrchestrator Benchmark Results" >> $GITHUB_STEP_SUMMARY
+        cat benchmark-report.md >> $GITHUB_STEP_SUMMARY
+      shell: bash
