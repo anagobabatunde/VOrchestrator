@@ -6,6 +6,9 @@
 
 A lightweight, single-binary container orchestration tool built in Vlang.
 
+[![Tests Status](https://github.com/anagobabatunde/VOrchestrator/actions/workflows/tests.yml/badge.svg)](https://github.com/anagobabatunde/VOrchestrator/actions/workflows/tests.yml)
+[![Benchmarks Status](https://github.com/anagobabatunde/VOrchestrator/actions/workflows/benchmarks.yml/badge.svg)](https://github.com/anagobabatunde/VOrchestrator/actions/workflows/benchmarks.yml)
+
 ## Overview
 
 VOrchestrator is a simple tool that allows you to manage small-scale containerized workloads with a focus on:
