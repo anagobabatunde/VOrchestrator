@@ -20,21 +20,21 @@ fn main() {
 	
 	// Ensure VOrchestrator is built with optimizations
 	println('\nBuilding VOrchestrator with optimizations...')
-	build_result := os.system('cd .. && v -prod -o VOrchestrator main.v')
+	build_result := os.system('cd ../.. && v -prod .')
 	if build_result != 0 {
 		println('Failed to build VOrchestrator. Exiting benchmark.')
 		exit(1)
 	}
 	
 	// Measure binary size
-	binary_size := measure_binary_size('../VOrchestrator')
+	binary_size := measure_binary_size('../../VOrchestrator')
 	println('Binary size: ${binary_size / 1024} KB (${binary_size / (1024 * 1024)} MB)')
 	
 	// Kill any existing VOrchestrator processes
 	os.system('pkill -f VOrchestrator || true')
 	
 	// Clean any existing containers
-	os.system('../VOrchestrator stop-all')
+	os.system('../../VOrchestrator stop-all')
 	time.sleep(2 * time.second)
 	
 	// Run the benchmarks
@@ -62,7 +62,7 @@ fn main() {
 	println('Binary size: ${binary_size / 1024} KB - Target: <10,240 KB (10 MB) - ${if binary_size < 10240 * 1024 { term.green('PASSED') } else { term.red('FAILED') }}')
 	
 	// Get max memory usage
-	max_memory := 0
+	mut max_memory := 0
 	for b in benchmarks {
 		if b.memory_kb > max_memory {
 			max_memory = b.memory_kb
@@ -72,7 +72,7 @@ fn main() {
 	println('Max memory usage: ${max_memory} KB - Target: <51,200 KB (50 MB) - ${if max_memory < 51200 { term.green('PASSED') } else { term.red('FAILED') }}')
 	
 	// Clean up
-	os.system('../VOrchestrator stop-all')
+	os.system('../../VOrchestrator stop-all')
 }
 
 // Measure base application startup time
@@ -81,7 +81,7 @@ fn benchmark_startup() BenchmarkResult {
 	
 	// Run VOrchestrator help and measure time
 	start := time.now()
-	result := os.execute('../VOrchestrator')
+	os.execute('../../VOrchestrator')
 	duration := time.now() - start
 	
 	// Measure memory usage
@@ -107,7 +107,7 @@ fn benchmark_container_startup() BenchmarkResult {
 	println('\nBenchmarking container startup (single container)...')
 	
 	// Clean up any existing containers
-	os.system('../VOrchestrator stop-all')
+	os.system('../../VOrchestrator stop-all')
 	time.sleep(2 * time.second)
 	
 	// Create a minimal config for a single container
@@ -119,7 +119,7 @@ fn benchmark_container_startup() BenchmarkResult {
 	
 	// Run and measure startup time for a single container
 	start := time.now()
-	os.system('../VOrchestrator up --config=temp/single.json')
+	os.system('../../VOrchestrator up --config=temp/single.json')
 	duration := time.now() - start
 	
 	// Measure memory and CPU
@@ -132,7 +132,7 @@ fn benchmark_container_startup() BenchmarkResult {
 	println('  CPU usage: ${cpu}%')
 	
 	// Clean up
-	os.system('../VOrchestrator stop-all')
+	os.system('../../VOrchestrator stop-all')
 	
 	return BenchmarkResult{
 		name: 'Container Startup (1)',
@@ -148,16 +148,16 @@ fn benchmark_container_monitoring() BenchmarkResult {
 	println('\nBenchmarking container health monitoring...')
 	
 	// Clean up any existing containers
-	os.system('../VOrchestrator stop-all')
+	os.system('../../VOrchestrator stop-all')
 	time.sleep(2 * time.second)
 	
 	// Start a container for monitoring
-	os.system('../VOrchestrator up --config=temp/single.json')
+	os.system('../../VOrchestrator up --config=temp/single.json')
 	time.sleep(5 * time.second) // Wait for container to initialize
 	
 	// Measure health check performance
 	start := time.now()
-	os.system('../VOrchestrator health')
+	os.system('../../VOrchestrator health')
 	duration := time.now() - start
 	
 	// Measure memory and CPU
@@ -170,7 +170,7 @@ fn benchmark_container_monitoring() BenchmarkResult {
 	println('  CPU usage: ${cpu}%')
 	
 	// Clean up
-	os.system('../VOrchestrator stop-all')
+	os.system('../../VOrchestrator stop-all')
 	
 	return BenchmarkResult{
 		name: 'Health Monitoring',
@@ -186,7 +186,7 @@ fn benchmark_multiple_containers() BenchmarkResult {
 	println('\nBenchmarking multiple container management...')
 	
 	// Clean up any existing containers
-	os.system('../VOrchestrator stop-all')
+	os.system('../../VOrchestrator stop-all')
 	time.sleep(2 * time.second)
 	
 	// Create a config for multiple containers
@@ -197,7 +197,7 @@ fn benchmark_multiple_containers() BenchmarkResult {
 	
 	// Run and measure startup time for multiple containers
 	start := time.now()
-	os.system('../VOrchestrator up --config=temp/multi.json')
+	os.system('../../VOrchestrator up --config=temp/multi.json')
 	duration := time.now() - start
 	
 	// Measure memory and CPU
@@ -210,7 +210,7 @@ fn benchmark_multiple_containers() BenchmarkResult {
 	println('  CPU usage: ${cpu}%')
 	
 	// Clean up
-	os.system('../VOrchestrator stop-all')
+	os.system('../../VOrchestrator stop-all')
 	os.system('rm -rf temp')
 	
 	return BenchmarkResult{
