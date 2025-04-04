@@ -223,11 +223,15 @@ v run benchmark.v
 
 ## Future Roadmap
 
+VOrchestrator is under active development. Our future plans include:
+
 - Additional health check customization options
 - Service discovery
 - Persistent volumes management
 - Improved container networking options
 - Support for additional container runtimes
+
+For a detailed development roadmap with version targets and feature descriptions, see our [ROADMAP.md](ROADMAP.md) file.
 
 ## License
 
