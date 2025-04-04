@@ -1,0 +1,31 @@
+name: VOrchestrator Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup V
+      uses: vlang/setup-v@v1
+      with:
+        check-latest: true
+    
+    - name: Install dependencies
+      run: v install
+      
+    - name: Build VOrchestrator
+      run: v .
+    
+    - name: Run tests
+      run: cd tests && v run run_tests.v
+      
+    - name: Run benchmarks
+      run: cd tests/benchmarks && v run benchmark.v
