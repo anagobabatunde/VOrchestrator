@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/VOchestrator-logo.png" alt="VOrchestrator Logo" width="300">
+</p>
+
 # VOrchestrator
 
 A lightweight, single-binary container orchestration tool built in Vlang.
